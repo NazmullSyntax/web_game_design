@@ -814,4 +814,298 @@
     ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r);
     ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y +
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawObstacles() {
+    ctx.fillStyle = 'rgba(255, 60, 90, 0.85)';
+    ctx.shadowColor = '#ff3c5a';
+    ctx.shadowBlur = 10;
+    for (const o of obstacles) {
+      const pad = 3;
+      roundedRect(o.x * CELL + pad, o.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 4);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  function drawSnake() {
+    const shielded = hasEffect('shield');
+    for (let i = snake.length - 1; i >= 0; i--) {
+      const s = snake[i];
+      const t = i / Math.max(1, snake.length - 1);
+      const pad = 2 + t * 3;
+      const x = s.x * CELL + pad;
+      const y = s.y * CELL + pad;
+      const size = CELL - pad * 2;
+
+      const r = Math.round(0   + t * 139);
+      const g = Math.round(240 - t * 157);
+      const b = Math.round(255 - t * 9);
+      const color = `rgb(${r}, ${g}, ${b})`;
+
+      ctx.shadowColor = i === 0 ? (shielded ? '#ffffff' : '#00f0ff') : color;
+      ctx.shadowBlur = i === 0 ? (shielded ? 30 : 20) : 8;
+      ctx.fillStyle = color;
+      roundedRect(x, y, size, size, Math.min(6, size / 3));
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // Shield aura around head
+    if (shielded) {
+      const head = snake[0];
+      const cx = head.x * CELL + CELL / 2;
+      const cy = head.y * CELL + CELL / 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(cx, cy, CELL * 0.85 + Math.sin(performance.now() * 0.01) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Eyes
+    const head = snake[0];
+    const hx = head.x * CELL;
+    const hy = head.y * CELL;
+    ctx.fillStyle = '#06060f';
+    const eyeOff = CELL * 0.28;
+    const eyeR = CELL * 0.09;
+    let e1x, e1y, e2x, e2y;
+    if (dir.x === 1)       { e1x = hx + CELL - eyeOff; e1y = hy + eyeOff;      e2x = hx + CELL - eyeOff; e2y = hy + CELL - eyeOff; }
+    else if (dir.x === -1) { e1x = hx + eyeOff;        e1y = hy + eyeOff;      e2x = hx + eyeOff;        e2y = hy + CELL - eyeOff; }
+    else if (dir.y === 1)  { e1x = hx + eyeOff;        e1y = hy + CELL - eyeOff; e2x = hx + CELL - eyeOff; e2y = hy + CELL - eyeOff; }
+    else                   { e1x = hx + eyeOff;        e1y = hy + eyeOff;      e2x = hx + CELL - eyeOff; e2y = hy + eyeOff; }
+    ctx.beginPath(); ctx.arc(e1x, e1y, eyeR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x, e2y, eyeR, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawFood() {
+    const cx = food.x * CELL + CELL / 2;
+    const cy = food.y * CELL + CELL / 2;
+    const pulse = 1 + Math.sin(foodPulse) * 0.15;
+    const r = (CELL * 0.32) * pulse;
+
+    ctx.shadowColor = '#ff2bd6';
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = '#ff2bd6';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawPowerupDrop() {
+    if (!powerupDrop) return;
+    const now = performance.now();
+    const remaining = powerupDrop.expires - now;
+    if (remaining <= 0) return;
+
+    const cfg = POWERUP_TYPES[powerupDrop.type];
+    const cx = powerupDrop.x * CELL + CELL / 2;
+    const cy = powerupDrop.y * CELL + CELL / 2;
+    const blink = remaining < 2000 ? (Math.sin(now * 0.02) * 0.5 + 0.5) : 1;
+    const pulse = 1 + Math.sin(foodPulse * 1.5) * 0.18;
+    const r = (CELL * 0.34) * pulse;
+
+    ctx.globalAlpha = 0.35 * blink + 0.65;
+    ctx.shadowColor = cfg.color;
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#06060f';
+    ctx.font = `bold ${CELL * 0.5}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cfg.icon, cx, cy + 1);
+
+    ctx.globalAlpha = 1;
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  // Slow-mo visual tint
+  function drawSlowmoOverlay() {
+    if (!hasEffect('slow')) return;
+    ctx.fillStyle = 'rgba(57, 255, 136, 0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawGrid();
+    if (state !== 'ready') {
+      drawObstacles();
+      drawFood();
+      drawPowerupDrop();
+      drawSnake();
+    }
+    drawParticles();
+    drawSlowmoOverlay();
+  }
+
+  // ================= LOOP =================
+  function loop(t) {
+    const dt = t - lastRender;
+    lastRender = t;
+    foodPulse += dt * 0.006;
+    updateParticles();
+    tickEffects();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // ================= INPUT =================
+  function setDir(nx, ny) {
+    if (nx === -dir.x && ny === -dir.y) return;
+    nextDir = { x: nx, y: ny };
+  }
+
+  const keyMap = {
+    ArrowUp:    [0, -1], w: [0, -1], W: [0, -1],
+    ArrowDown:  [0,  1], s: [0,  1], S: [0,  1],
+    ArrowLeft:  [-1, 0], a: [-1, 0], A: [-1, 0],
+    ArrowRight: [1,  0], d: [1,  0], D: [1,  0],
+  };
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'm' || e.key === 'M') {
+      toggleSound();
+      return;
+    }
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'playing') {
+        state = 'paused';
+        clearInterval(tickTimer);
+        overlayTitle.textContent = 'PAUSED';
+        overlaySub.textContent = 'Press Space or click Resume to continue.';
+        startBtn.textContent = 'Resume';
+        difficultyEl.style.display = 'none';
+        overlay.classList.remove('hidden');
+      } else if (state === 'paused') {
+        state = 'playing';
+        overlay.classList.add('hidden');
+        rescheduleTick();
+      }
+      return;
+    }
+    const k = keyMap[e.key];
+    if (k) {
+      e.preventDefault();
+      if (state === 'playing') setDir(k[0], k[1]);
+    }
+  });
+
+  // Mobile D-pad
+  document.querySelectorAll('.dpad button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const map = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+      const d = map[btn.dataset.dir];
+      if (d && state === 'playing') setDir(d[0], d[1]);
+    });
+  });
+
+  // Swipe
+  let touchStart = null;
+  canvas.addEventListener('touchstart', (e) => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', (e) => {
+    if (!touchStart || state !== 'playing') return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+    else setDir(0, dy > 0 ? 1 : -1);
+    touchStart = null;
+  }, { passive: true });
+
+  // Difficulty buttons
+  function updateDiffButtons() {
+    document.querySelectorAll('.diff-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.diff === difficulty);
+    });
+  }
+
+  difficultyEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.diff-btn');
+    if (!btn) return;
+    difficulty = btn.dataset.diff;
+    localStorage.setItem('neonSnakeDiff', difficulty);
+    updateDiffButtons();
+    beep(500, 0.06, 'sine', 0.05);
+  });
+
+  // Sound toggle
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    soundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+    soundToggle.classList.toggle('muted', !soundEnabled);
+    if (soundEnabled) { ensureAudio(); beep(660, 0.08, 'sine', 0.05); }
+    localStorage.setItem('neonSnakeSound', soundEnabled ? '1' : '0');
+  }
+  soundToggle.addEventListener('click', toggleSound);
+
+  // Restore sound preference
+  if (localStorage.getItem('neonSnakeSound') === '0') {
+    soundEnabled = false;
+    soundToggle.textContent = '🔇';
+    soundToggle.classList.add('muted');
+  }
+
+  // ================= START =================
+  function startGame() {
+    ensureAudio();
+    reset();
+    state = 'playing';
+    overlay.classList.add('hidden');
+    clearInterval(tickTimer);
+    rescheduleTick();
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (state === 'paused') {
+      state = 'playing';
+      overlay.classList.add('hidden');
+      rescheduleTick();
+    } else {
+      startGame();
+    }
+  });
+
+  // ================= BOOT =================
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
