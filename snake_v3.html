@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Neon Snake v3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --neon-cyan: #00f0ff;
+    --neon-pink: #ff2bd6;
+    --neon-purple: #8b5cf6;
+    --neon-green: #39ff88;
+    --neon-yellow: #ffe14d;
+    --neon-orange: #ff8a3d;
+    --bg-panel: rgba(20, 20, 45, 0.7);
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 50%, #1a1a3e 0%, #05050f 100%);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: #fff;
+    overflow: hidden;
+    padding: 16px;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0, 240, 255, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridMove 20s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes gridMove { from { background-position: 0 0; } to { background-position: 40px 40px; } }
+
+  .game-container {
+    position: relative;
+    background: var(--bg-panel);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow:
+      0 0 60px rgba(0, 240, 255, 0.15),
+      0 0 100px rgba(255, 43, 214, 0.08),
+      inset 0 0 40px rgba(0, 240, 255, 0.05);
+    animation: floatIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes floatIn {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+  }
+
+  .scores { display: flex; gap: 12px; align-items: center; }
+  .score-box { text-align: right; }
+  .score-box.p1 .score-value { color: var(--neon-cyan); text-shadow: 0 0 15px var(--neon-cyan); }
+  .score-box.p2 .score-value { color: var(--neon-orange); text-shadow: 0 0 15px var(--neon-orange); }
+  .score-label {
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .score-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 15px var(--neon-cyan);
+    font-variant-numeric: tabular-nums;
+  }
+  .score-value.high { color: var(--neon-pink); text-shadow: 0 0 15px var(--neon-pink); }
+  .score-value.level { color: var(--neon-yellow); text-shadow: 0 0 15px var(--neon-yellow); }
+
+  /* Power-ups + combo bar */
+  .status-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    min-height: 34px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .powerups {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    flex-wrap: wrap;
+  }
+  .powerup-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 50px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    animation: chipIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes chipIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .powerup-chip.shield { background: rgba(0, 240, 255, 0.15); border: 1px solid var(--neon-cyan); color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4); }
+  .powerup-chip.slow   { background: rgba(57, 255, 136, 0.15); border: 1px solid var(--neon-green); color: var(--neon-green); box-shadow: 0 0 15px rgba(57, 255, 136, 0.4); }
+  .powerup-chip.x2     { background: rgba(255, 225, 77, 0.15); border: 1px solid var(--neon-yellow); color: var(--neon-yellow); box-shadow: 0 0 15px rgba(255, 225, 77, 0.4); }
+  .powerup-chip.magnet { background: rgba(255, 138, 61, 0.15); border: 1px solid var(--neon-orange); color: var(--neon-orange); box-shadow: 0 0 15px rgba(255, 138, 61, 0.4); }
+  .powerup-chip .timer { font-size: 0.6rem; opacity: 0.75; font-variant-numeric: tabular-nums; }
+
+  .combo-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-radius: 50px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    transition: all 0.2s ease;
+  }
+  .combo-box.active {
+    color: var(--neon-pink);
+    border-color: var(--neon-pink);
+    box-shadow: 0 0 15px rgba(255, 43, 214, 0.5);
+  }
+  .combo-meter {
+    width: 60px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+  }
+  .combo-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+    transition: width 0.1s linear;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    line-height: 0;
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.6);
+  }
+
+  canvas { display: block; background: #06060f; border-radius: 16px; }
+
+  .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97); }
+  @keyframes shake {
+    10%, 90% { transform: translate(-2px, 0); }
+    20%, 80% { transform: translate(4px, 0); }
+    30%, 50%, 70% { transform: translate(-6px, 0); }
+    40%, 60% { transform: translate(6px, 0); }
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6, 6, 15, 0.9);
+    backdrop-filter: blur(8px);
+    border-radius: 16px;
+    gap: 12px;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .overlay-title {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+  }
+
+  .overlay-sub {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.65);
+    text-align: center;
+    max-width: 340px;
+    line-height: 1.5;
+  }
+
+  /* Mode / difficulty sections */
+  .option-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .option-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+  .diff-btn, .mode-btn {
+    padding: 7px 16px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+  .diff-btn:hover, .mode-btn:hover { color: #fff; border-color: rgba(0, 240, 255, 0.5); }
+  .diff-btn.active, .mode-btn.active {
+    color: #fff;
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+    border-color: transparent;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+  }
+
+  .seed-input {
+    padding: 7px 14px;
+    font-size: 0.75rem;
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50px;
+    color: #fff;
+    width: 180px;
+    text-align: center;
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .seed-input:focus { border-color: var(--neon-cyan); }
+
+  .btn {
+    margin-top: 4px;
+    padding: 11px 34px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #fff;
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    font-family: inherit;
+  }
+  .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 0 40px rgba(0, 240, 255, 0.8); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+
+  .legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+  .dot.shield { background: var(--neon-cyan); color: var(--neon-cyan); }
+  .dot.slow   { background: var(--neon-green); color: var(--neon-green); }
+  .dot.x2     { background: var(--neon-yellow); color: var(--neon-yellow); }
+  .dot.magnet { background: var(--neon-orange); color: var(--neon-orange); }
+
+  .controls {
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 6px;
+    box-shadow: 0 2px 0 rgba(0, 240, 255, 0.15);
+  }
+  .hint {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-align: center;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+  }
+
+  .sound-toggle {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: 50%;
+    color: var(--neon-cyan);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    z-index: 20;
+  }
+  .sound-toggle:hover { background: rgba(0, 240, 255, 0.15); }
+  .sound-toggle.muted { color: rgba(255, 255, 255, 0.3); }
+
+  .dpad {
+    display: none;
+    margin-top: 12px;
+    grid-template-columns: repeat(3, 50px);
+    grid-template-rows: repeat(2, 50px);
+    gap: 6px;
+    justify-content: center;
+  }
+  .dpad button {
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    color: var(--neon-cyan);
+    font-size: 1.1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .dpad button:active { background: rgba(0, 240, 255, 0.25); }
+  .dpad .up    { grid-column: 2; grid-row: 1; }
+  .dpad .left  { grid-column: 1; grid-row: 2; }
+  .dpad .down  { grid-column: 2; grid-row: 2; }
+  .dpad .right { grid-column: 3; grid-row: 2; }
+
+  @media (max-width: 600px) {
+    .title { font-size: 0.95rem; letter-spacing: 1px; }
+    .score-value { font-size: 0.95rem; }
+    .game-container { padding: 14px; border-radius: 18px; }
+    .dpad { display: grid; }
+    .controls { display: none; }
+    .overlay-title { font-size: 1.5rem; }
+    .overlay { gap: 8px; padding: 14px; }
+    .overlay-sub { font-size: 0.75rem; }
+    .seed-input { width: 140px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <div class="sound-toggle" id="soundToggle" title="Toggle sound">🔊</div>
+
+  <div class="header">
+    <div class="title">NEON&nbsp;SNAKE&nbsp;v3</div>
+    <div class="scores">
+      <div class="score-box p1" id="p1ScoreBox">
+        <div class="score-label">P1</div>
+        <div class="score-value" id="score">0</div>
+      </div>
+      <div class="score-box p2" id="p2ScoreBox" style="display:none">
+        <div class="score-label">P2</div>
+        <div class="score-value" id="score2">0</div>
+      </div>
+      <div class="score-box">
+        <div class="score-label">Best</div>
+        <div class="score-value high" id="highScore">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div class="powerups" id="powerups"></div>
+    <div class="combo-box" id="comboBox">
+      <span id="comboLabel">Combo ×1</span>
+      <div class="combo-meter"><div class="combo-fill" id="comboFill"></div></div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="game" width="480" height="480"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="overlay-title" id="overlayTitle">NEON SNAKE v3</div>
+      <div class="overlay-sub" id="overlaySub">
+        Eat orbs. Chain combos. Grab power-ups.
+      </div>
+
+      <div class="option-section">
+        <div class="option-label">Mode</div>
+        <div class="btn-row" id="modeRow">
+          <button class="mode-btn active" data-mode="solo">Solo</button>
+          <button class="mode-btn" data-mode="duel">2P Duel</button>
+          <button class="mode-btn" data-mode="daily">Daily</button>
+        </div>
+      </div>
+
+      <div class="option-section" id="diffSection">
+        <div class="option-label">Difficulty</div>
+        <div class="btn-row" id="difficulty">
+          <button class="diff-btn" data-diff="easy">Easy</button>
+          <button class="diff-btn active" data-diff="normal">Normal</button>
+          <button class="diff-btn" data-diff="hard">Hard</button>
+        </div>
+      </div>
+
+      <div class="option-section" id="seedSection" style="display:none">
+        <div class="option-label">Seed</div>
+        <input type="text" class="seed-input" id="seedInput" placeholder="daily-2026-01-01" />
+      </div>
+
+      <button class="btn" id="startBtn">Play</button>
+
+      <div class="legend">
+        <div class="legend-item"><span class="dot shield"></span> Shield</div>
+        <div class="legend-item"><span class="dot slow"></span> Slow-mo</div>
+        <div class="legend-item"><span class="dot x2"></span> Double</div>
+        <div class="legend-item"><span class="dot magnet"></span> Magnet</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <span class="key">P1: ↑←↓→ / WASD</span>
+    <span class="key">P2: I J K L</span>
+    <span class="key">Space</span>
+    <span class="key">M</span>
+  </div>
+  <div class="hint">Space to pause · M to mute · Swipe on mobile</div>
+
+  <div class="dpad">
+    <button class="up"    data-dir="up">▲</button>
+    <button class="left"  data-dir="left">◀</button>
+    <button class="down"  data-dir="down">▼</button>
+    <button class="right" data-dir="right">▶</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ================= CONFIG =================
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const GRID = 24;
+  const CELL = canvas.width / GRID;
+
+  const DIFFICULTIES = {
+    easy:   { baseSpeed: 140, speedUpEvery: 80, minSpeed: 80, obstaclesPerLevel: 0 },
+    normal: { baseSpeed: 110, speedUpEvery: 50, minSpeed: 60, obstaclesPerLevel: 2 },
+    hard:   { baseSpeed: 85,  speedUpEvery: 30, minSpeed: 45, obstaclesPerLevel: 3 },
+  };
+
+  const POWERUP_TYPES = {
+    shield: { color: '#00f0ff', duration: 8000,  label: 'Shield',  icon: '🛡' },
+    slow:   { color: '#39ff88', duration: 5000,  label: 'Slow-mo', icon: '⏱' },
+    x2:     { color: '#ffe14d', duration: 10000, label: 'Double',  icon: '×2' },
+    magnet: { color: '#ff8a3d', duration: 7000,  label: 'Magnet',  icon: '🧲' },
+  };
+
+  const POWERUP_CHANCE = 0.25;
+  const POWERUP_LIFETIME = 7000;
+
+  // Combo
+  const COMBO_WINDOW = 2500;   // ms between eats to keep the chain alive
+  const COMBO_MAX = 8;
+
+  // ================= DOM =================
+  const scoreEl       = document.getElementById('score');
+  const score2El      = document.getElementById('score2');
+  const p2ScoreBox    = document.getElementById('p2ScoreBox');
+  const highEl        = document.getElementById('highScore');
+  const powerupsEl    = document.getElementById('powerups');
+  const comboBox      = document.getElementById('comboBox');
+  const comboLabel    = document.getElementById('comboLabel');
+  const comboFill     = document.getElementById('comboFill');
+  const overlay       = document.getElementById('overlay');
+  const overlayTitle  = document.getElementById('overlayTitle');
+  const overlaySub    = document.getElementById('overlaySub');
+  const startBtn      = document.getElementById('startBtn');
+  const difficultyEl  = document.getElementById('difficulty');
+  const diffSection   = document.getElementById('diffSection');
+  const modeRow       = document.getElementById('modeRow');
+  const seedSection   = document.getElementById('seedSection');
+  const seedInput     = document.getElementById('seedInput');
+  const canvasWrap    = document.getElementById('canvasWrap');
+  const soundToggle   = document.getElementById('soundToggle');
+
+  // ================= STATE =================
+  let players;             // array of player objects (1 or 2)
+  let food;                // { x, y }
+  let food2;               // second food for duel mode
+  let powerupDrop;
+  let highScore;
+  let level;
+  let state;               // ready | playing | paused | over
+  let tickTimer;
+  let particles;
+  let foodPulse;
+  let obstacles;
+  let difficulty;
+  let mode;                // solo | duel | daily
+  let soundEnabled = true;
+  let lastRender = 0;
+  let worldEffects = {};   // { slow: expiresAt } — global effect (slow-mo affects all)
+  let prng;                // seeded RNG
+  let currentSeed = '';
+
+  // ================= SEEDED RNG (mulberry32) =================
+  function makeRng(seedStr) {
+    let h = 1779033703 ^ seedStr.length;
+    for (let i = 0; i < seedStr.length; i++) {
+      h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    let a = h >>> 0;
+    return function() {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function rand() { return prng ? prng() : Math.random(); }
+  function randInt(n) { return Math.floor(rand() * n); }
+
+  function todaySeed() {
+    const d = new Date();
+    return `daily-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  // ================= AUDIO =================
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { audioCtx = null; }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function beep(freq, duration, type = 'sine', volume = 0.08, slideTo = null) {
+    if (!soundEnabled || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + duration);
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + duration);
+  }
+
+  const sfx = {
+    eat:      () => { beep(660, 0.08, 'square', 0.06); setTimeout(() => beep(880, 0.09, 'square', 0.05), 60); },
+    combo:    (n) => { beep(440 + n * 90, 0.1, 'triangle', 0.09); },
+    powerup:  () => { beep(523, 0.09, 'triangle', 0.09); setTimeout(() => beep(784, 0.1, 'triangle', 0.09), 70); setTimeout(() => beep(1047, 0.14, 'triangle', 0.09), 140); },
+    hit:      () => { beep(160, 0.25, 'sawtooth', 0.12, 60); },
+    gameover: () => { beep(440, 0.15, 'sawtooth', 0.1, 220); setTimeout(() => beep(220, 0.4, 'sawtooth', 0.12, 80), 150); },
+    levelup:  () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'triangle', 0.08), i * 70)); },
+  };
+
+  // ================= PLAYER FACTORY =================
+  function makePlayer(id, color, spawnY) {
+    const mid = Math.floor(GRID / 2);
+    const headX = id === 1 ? mid - 3 : mid + 3;
+    return {
+      id,
+      color,
+      snake: [
+        { x: headX,     y: spawnY },
+        { x: headX - 1, y: spawnY },
+        { x: headX - 2, y: spawnY },
+      ],
+      dir: { x: 1, y: 0 },
+      nextDir: { x: 1, y: 0 },
+      score: 0,
+      alive: true,
+      effects: {},
+      combo: 0,
+      lastEat: 0,
+      hasEatenOnce: false,
+    };
+  }
+
+  // ================= RESET =================
+  function reset() {
+    const mid = Math.floor(GRID / 2);
+    const p1Spawn = mode === 'duel' ? mid - 5 : mid;
+    const p2Spawn = mid + 5;
+
+    players = [ makePlayer(1, '#00f0ff', p1Spawn) ];
+    if (mode === 'duel') players.push(makePlayer(2, '#ff8a3d', p2Spawn));
+
+    level = 1;
+    particles = [];
+    foodPulse = 0;
+    worldEffects = {};
+    powerupDrop = null;
+    obstacles = [];
+
+    players.forEach(p => { p.score = 0; p.snake.forEach(s => { s.y = p.snake[0].y; }); });
+
+    // Reconstruct snakes for duel so they don't overlap
+    if (mode === 'duel') {
+      const midRow = Math.floor(GRID / 2);
+      players[0].snake = [
+        { x: mid - 4, y: midRow }, { x: mid - 5, y: midRow }, { x: mid - 6, y: midRow },
+      ];
+      players[0].dir = { x: 1, y: 0 }; players[0].nextDir = { x: 1, y: 0 };
+      players[1].snake = [
+        { x: mid + 4, y: midRow }, { x: mid + 5, y: midRow }, { x: mid + 6, y: midRow },
+      ];
+      players[1].dir = { x: -1, y: 0 }; players[1].nextDir = { x: -1, y: 0 };
+    }
+
+    scoreEl.textContent = '0';
+    if (score2El) score2El.textContent = '0';
+    updateComboUI();
+    updatePowerupHUD();
+    buildObstacles();
+    placeFood();
+    state = 'ready';
+  }
+
+  // ================= OBSTACLES =================
+  function buildObstacles() {
+    obstacles = [];
+    const cfg = DIFFICULTIES[difficulty];
+    if (cfg.obstaclesPerLevel === 0) return;
+
+    const count = cfg.obstaclesPerLevel * level;
+    const forbidden = new Set();
+    const mid = Math.floor(GRID / 2);
+    for (let x = 0; x < GRID; x++) {
+      for (let y = mid - 2; y <= mid + 2; y++) forbidden.add(`${x},${y}`);
+    }
+
+    let attempts = 0;
+    while (obstacles.length < count && attempts < 500) {
+      attempts++;
+      const len = 2 + randInt(3);
+      const horiz = rand() < 0.5;
+      const x = randInt(GRID - (horiz ? len : 1));
+      const y = randInt(GRID - (horiz ? 1 : len));
+      const cells = [];
+      let ok = true;
+      for (let i = 0; i < len; i++) {
+        const cx = x + (horiz ? i : 0);
+        const cy = y + (horiz ? 0 : i);
+        if (forbidden.has(`${cx},${cy}`)) { ok = false; break; }
+        if (obstacles.some(o => o.x === cx && o.y === cy)) { ok = false; break; }
+        cells.push({ x: cx, y: cy });
+      }
+      if (!ok) continue;
+      cells.forEach(c => { obstacles.push(c); forbidden.add(`${c.x},${c.y}`); });
+    }
+  }
+
+  // ================= FOOD / POWERUPS =================
+  function cellTaken(x, y) {
+    if (obstacles.some(o => o.x === x && o.y === y)) return true;
+    for (const p of players) {
+      if (!p.alive) continue;
+      if (p.snake.some(s => s.x === x && s.y === y)) return true;
+    }
+    if (food && food.x === x && food.y === y) return true;
+    if (food2 && food2.x === x && food2.y === y) return true;
+    if (powerupDrop && powerupDrop.x === x && powerupDrop.y === y) return true;
+    return false;
+  }
+
+  function randomFreeCell() {
+    const free = [];
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (!cellTaken(x, y)) free.push({ x, y });
+      }
+    }
+    return free.length ? free[randInt(free.length)] : null;
+  }
+
+  function placeFood() {
+    const cell = randomFreeCell();
+    if (cell) food = cell;
+
+    if (mode === 'duel') {
+      const cell2 = randomFreeCell();
+      if (cell2) food2 = cell2;
+    } else {
+      food2 = null;
+    }
+
+    // Power-up chance
+    if (!powerupDrop && rand() < POWERUP_CHANCE) {
+      const drop = randomFreeCell();
+      if (drop) {
+        const types = Object.keys(POWERUP_TYPES);
+        const type = types[randInt(types.length)];
+        powerupDrop = {
+          x: drop.x, y: drop.y, type,
+          expires: performance.now() + POWERUP_LIFETIME,
+        };
+      }
+    }
+  }
+
+  // ================= EFFECTS =================
+  function activateEffect(player, type) {
+    const now = performance.now();
+    if (type === 'slow') {
+      worldEffects.slow = now + POWERUP_TYPES.slow.duration;
+      rescheduleTick();
+    } else {
+      player.effects[type] = now + POWERUP_TYPES[type].duration;
+    }
+    sfx.powerup();
+    updatePowerupHUD();
+  }
+
+  function hasEffect(player, type) {
+    if (type === 'slow') return worldEffects.slow && worldEffects.slow > performance.now();
+    return player.effects[type] && player.effects[type] > performance.now();
+  }
+
+  function updatePowerupHUD() {
+    const now = performance.now();
+    let html = '';
+    // World effects (slow-mo)
+    if (worldEffects.slow && worldEffects.slow > now) {
+      const cfg = POWERUP_TYPES.slow;
+      const secs = ((worldEffects.slow - now) / 1000).toFixed(1);
+      html += `<div class="powerup-chip slow"><span>${cfg.icon}</span><span>${cfg.label}</span><span class="timer">${secs}s</span></div>`;
+    }
+    // Per-player effects (show for P1 only to keep HUD clean; in duel, both still work)
+    const p1 = players[0];
+    if (p1 && p1.alive) {
+      for (const [type, expires] of Object.entries(p1.effects)) {
+        if (expires <= now) continue;
+        const cfg = POWERUP_TYPES[type];
+        const secs = ((expires - now) / 1000).toFixed(1);
+        html += `<div class="powerup-chip ${type}"><span>${cfg.icon}</span><span>${cfg.label}</span><span class="timer">${secs}s</span></div>`;
+      }
+    }
+    powerupsEl.innerHTML = html;
+  }
+
+  function tickEffects() {
+    const now = performance.now();
+    let changed = false;
+    for (const p of players) {
+      for (const type of Object.keys(p.effects)) {
+        if (p.effects[type] <= now) { delete p.effects[type]; changed = true; }
+      }
+    }
+    if (worldEffects.slow && worldEffects.slow <= now) {
+      delete worldEffects.slow;
+      changed = true;
+      rescheduleTick();
+    }
+    if (changed) updatePowerupHUD();
+    else if (Object.keys(worldEffects).length || players.some(p => Object.keys(p.effects).length)) {
+      updatePowerupHUD();
+    }
+  }
+
+  // ================= COMBO =================
+  function bumpCombo(player) {
+    const now = performance.now();
+    if (player.hasEatenOnce && now - player.lastEat < COMBO_WINDOW) {
+      player.combo = Math.min(COMBO_MAX, player.combo + 1);
+      sfx.combo(player.combo);
+    } else {
+      player.combo = 1;
+    }
+    player.lastEat = now;
+    player.hasEatenOnce = true;
+    updateComboUI();
+  }
+
+  function comboMultiplier(player) {
+    return 1 + Math.max(0, player.combo - 1) * 0.5; // 1x, 1.5x, 2x, ...
+  }
+
+  function updateComboUI() {
+    const p1 = players[0];
+    if (!p1) return;
+    if (p1.combo > 1) {
+      comboBox.classList.add('active');
+      comboLabel.textContent = `Combo ×${comboMultiplier(p1).toFixed(1)}`;
+    } else {
+      comboBox.classList.remove('active');
+      comboLabel.textContent = 'Combo ×1';
+    }
+  }
+
+  function updateComboMeter() {
+    const p1 = players[0];
+    if (!p1) return;
+    const elapsed = performance.now() - p1.lastEat;
+    const remaining = Math.max(0, COMBO_WINDOW - elapsed);
+    comboFill.style.width = (remaining / COMBO_WINDOW * 100) + '%';
+  }
+
+  // ================= PARTICLES =================
+  function spawnParticles(gx, gy, color, count = 14) {
+    const cx = gx * CELL + CELL / 2;
+    const cy = gy * CELL + CELL / 2;
+    for (let i = 0; i < count; i++) {
+      const angle = rand() * Math.PI * 2;
+      const speed = 1 + rand() * 3.5;
+      particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1, color,
+        size: 2 + rand() * 3,
+      });
+    }
+  }
+
+  function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.94; p.vy *= 0.94;
+      p.life -= 0.035;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  // ================= GAME LOOP =================
+  function currentTickSpeed() {
+    const cfg = DIFFICULTIES[difficulty];
+    const maxScore = Math.max(...players.map(p => p.score));
+    let speed = Math.max(cfg.minSpeed, cfg.baseSpeed - Math.floor(maxScore / cfg.speedUpEvery) * 6);
+    if (worldEffects.slow && worldEffects.slow > performance.now()) speed *= 1.6;
+    return speed;
+  }
+
+  function rescheduleTick() {
+    if (state !== 'playing') return;
+    clearInterval(tickTimer);
+    tickTimer = setInterval(step, currentTickSpeed());
+  }
+
+  function step() {
+    // Apply queued directions
+    for (const p of players) {
+      if (p.alive) p.dir = p.nextDir;
+    }
+
+    // Compute new heads
+    const newHeads = players.map(p => p.alive ? { x: p.snake[0].x + p.dir.x, y: p.snake[0].y + p.dir.y } : null);
+
+    // Determine which players die this tick
+    const deaths = new Set();
+
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p.alive || !newHeads[i]) continue;
+      const head = newHeads[i];
+
+      // Wall
+      if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) { deaths.add(i); continue; }
+      // Obstacles
+      if (obstacles.some(o => o.x === head.x && o.y === head.y)) { deaths.add(i); continue; }
+      // Self
+      for (let j = 0; j < p.snake.length - 1; j++) {
+        if (p.snake[j].x === head.x && p.snake[j].y === head.y) { deaths.add(i); break; }
+      }
+      // Other player
+      for (let k = 0; k < players.length; k++) {
+        if (k === i) continue;
+        const q = players[k];
+        if (!q.alive) continue;
+        // Skip tail cell that's about to move
+        const isTail = head.x === q.snake[q.snake.length - 1].x && head.y === q.snake[q.snake.length - 1].y;
+        if (isTail) continue;
+        if (q.snake.some(s => s.x === head.x && s.y === head.y)) { deaths.add(i); break; }
+      }
+    }
+
+    // Head-on collision (both heads to same cell) → both die
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        if (newHeads[i] && newHeads[j] && newHeads[i].x === newHeads[j].x && newHeads[i].y === newHeads[j].y) {
+          deaths.add(i); deaths.add(j);
+        }
+      }
+    }
+
+    // Apply shield saves
+    for (const i of [...deaths]) {
+      const p = players[i];
+      if (hasEffect(p, 'shield')) {
+        p.effects.shield = 0;
+        deaths.delete(i);
+        sfx.hit();
+        shakeScreen();
+        spawnParticles(p.snake[0].x, p.snake[0].y, '#00f0ff', 20);
+        updatePowerupHUD();
+      }
+    }
+
+    if (deaths.size > 0) {
+      for (const i of deaths) players[i].alive = false;
+      // In solo, any death ends the game
+      if (mode === 'solo' || mode === 'daily') return gameOver();
+      // In duel, if all dead → game over; if only one → other wins
+      if (players.every(p => !p.alive)) return gameOver();
+      if (players.filter(p => p.alive).length === 1) return gameOver();
+    }
+
+    // Move all alive snakes forward
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p.alive) continue;
+      p.snake.unshift(newHeads[i]);
+
+      // Eat food (P1's food, or either food in duel)
+      let ate = false;
+      let ateFood = null;
+      if (food && newHeads[i].x === food.x && newHeads[i].y === food.y) { ate = true; ateFood = food; }
+      if (!ate && food2 && newHeads[i].x === food2.x && newHeads[i].y === food2.y) { ate = true; ateFood = food2; }
+
+      if (ate) {
+        bumpCombo(p);
+        const baseGain = hasEffect(p, 'x2') ? 20 : 10;
+        const gained = Math.round(baseGain * comboMultiplier(p));
+        p.score += gained;
+        if (p.id === 1) scoreEl.textContent = p.score;
+        else score2El.textContent = p.score;
+
+        sfx.eat();
+        spawnParticles(ateFood.x, ateFood.y, p.color);
+
+        // Level up (based on max score)
+        const newLevel = Math.floor(Math.max(...players.map(x => x.score)) / 100) + 1;
+        if (newLevel > level) {
+          level = newLevel;
+          sfx.levelup();
+          buildObstacles();
+        }
+
+        placeFood();
+        rescheduleTick();
+      } else {
+        p.snake.pop();
+      }
+
+      // Power-up pickup
+      if (powerupDrop && newHeads[i].x === powerupDrop.x && newHeads[i].y === powerupDrop.y) {
+        activateEffect(p, powerupDrop.type);
+        spawnParticles(powerupDrop.x, powerupDrop.y, POWERUP_TYPES[powerupDrop.type].color, 20);
+        powerupDrop = null;
+      }
+
+      // Magnet effect: pull nearest food one step closer every few ticks
+      if (hasEffect(p, 'magnet') && food) {
+        const head = p.snake[0];
+        const dx = food.x - head.x;
+        const dy = food.y - head.y;
+        if (Math.abs(dx) + Math.abs(dy) <= 6 && Math.random() < 0.5) {
+          // Step food toward head by 1 cell if free
+          let nx = food.x, ny = food.y;
+          if (Math.abs(dx) > Math.abs(dy)) nx -= Math.sign(dx);
+          else ny -= Math.sign(dy);
+          if (!cellTaken(nx, ny)) { food = { x: nx, y: ny }; }
+        }
+      }
+    }
+  }
+
+  function shakeScreen() {
+    canvasWrap.classList.remove('shake');
+    void canvasWrap.offsetWidth;
+    canvasWrap.classList.add('shake');
+    setTimeout(() => canvasWrap.classList.remove('shake'), 400);
+  }
+
+  function gameOver() {
+    state = 'over';
+    clearInterval(tickTimer);
+    sfx.gameover();
+    shakeScreen();
+
+    const p1 = players[0];
+    const p2 = players[1];
+    let best = p1.score;
+    if (p2) best = Math.max(best, p2.score);
+
+    if (mode !== 'duel' && p1.score > highScore) {
+      highScore = p1.score;
+      highEl.textContent = highScore;
+      localStorage.setItem('neonSnakeHigh', highScore);
+    }
+
+    let resultText = '';
+    if (mode === 'duel') {
+      if (!p1.alive && !p2.alive) resultText = 'Both snakes fell. Draw!';
+      else if (!p1.alive) resultText = `🏆 Player 2 wins with ${p2.score} points!`;
+      else if (!p2.alive) resultText = `🏆 Player 1 wins with ${p1.score} points!`;
+    } else {
+      resultText = `You scored <strong>${p1.score}</strong> points (Level ${level}).`;
+    }
+
+    overlayTitle.textContent = 'GAME OVER';
+    overlaySub.innerHTML = `${resultText}<br/>Play again?`;
+    startBtn.textContent = 'Retry';
+    diffSection.style.display = 'flex';
+    seedSection.style.display = mode === 'daily' ? 'flex' : 'none';
+    overlay.classList.remove('hidden');
+  }
+
+  // ================= RENDER =================
+  function drawGrid() {
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < GRID; i++) {
+      const p = i * CELL;
+      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(canvas.width, p); ctx.stroke();
+    }
+  }
+
+  function roundedRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawObstacles() {
+    ctx.fillStyle = 'rgba(255, 60, 90, 0.85)';
+    ctx.shadowColor = '#ff3c5a';
+    ctx.shadowBlur = 10;
+    for (const o of obstacles) {
+      const pad = 3;
+      roundedRect(o.x * CELL + pad, o.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 4);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  function drawSnakeBody(p) {
+    for (let i = p.snake.length - 1; i >= 0; i--) {
+      const s = p.snake[i];
+      const t = i / Math.max(1, p.snake.length - 1);
+      const pad = 2 + t * 3;
+      const x = s.x * CELL + pad;
+      const y = s.y * CELL + pad;
+      const size = CELL - pad * 2;
+
+      // Blend player color toward purple at tail
+      const baseColor = p.color;
+      const alpha = 1 - t * 0.5;
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = i === 0 ? baseColor : baseColor;
+      ctx.shadowBlur = i === 0 ? (hasEffect(p, 'shield') ? 30 : 20) : 8;
+      ctx.fillStyle = baseColor;
+      roundedRect(x, y, size, size, Math.min(6, size / 3));
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // Shield aura
+    if (hasEffect(p, 'shield')) {
+      const head = p.snake[0];
+      const cx = head.x * CELL + CELL / 2;
+      const cy = head.y * CELL + CELL / 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(cx, cy, CELL * 0.85 + Math.sin(performance.now() * 0.01) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Eyes
+    const head = p.snake[0];
+    const hx = head.x * CELL;
+    const hy = head.y * CELL;
+    ctx.fillStyle = '#06060f';
+    const eyeOff = CELL * 0.28;
+    const eyeR = CELL * 0.09;
+    let e1x, e1y, e2x, e2y;
+    const d = p.dir;
+    if (d.x === 1)       { e1x = hx + CELL - eyeOff; e1y = hy + eyeOff;      e2x = hx + CELL - eyeOff; e2y = hy + CELL - eyeOff; }
+    else if (d.x === -1) { e1x = hx + eyeOff;        e1y = hy + eyeOff;      e2x = hx + eyeOff;        e2y = hy + CELL - eyeOff; }
+    else if (d.y === 1)  { e1x = hx + eyeOff;        e1y = hy + CELL - eyeOff; e2x = hx + CELL - eyeOff; e2y = hy + CELL - eyeOff; }
+    else                 { e1x = hx + eyeOff;        e1y = hy + eyeOff;      e2x = hx + CELL - eyeOff; e2y = hy + eyeOff; }
+    ctx.beginPath(); ctx.arc(e1x, e1y, eyeR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x, e2y, eyeR, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawFoodAt(f, color, icon = null) {
+    if (!f) return;
+    const cx = f.x * CELL + CELL / 2;
+    const cy = f.y * CELL + CELL / 2;
+    const pulse = 1 + Math.sin(foodPulse) * 0.15;
+    const r = (CELL * 0.32) * pulse;
+
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    if (icon) {
+      ctx.fillStyle = '#06060f';
+      ctx.font = `bold ${CELL * 0.5}px 'Segoe UI', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(icon, cx, cy + 1);
+    } else {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawFood() {
+    drawFoodAt(food, '#ff2bd6');
+    if (food2) drawFoodAt(food2, '#ff8a3d');
+  }
+
+  function drawPowerupDrop() {
+    if (!powerupDrop) return;
+    const now = performance.now();
+    const remaining = powerupDrop.expires - now;
+    if (remaining <= 0) return;
+    const cfg = POWERUP_TYPES[powerupDrop.type];
+    const blink = remaining < 2000 ? (Math.sin(now * 0.02) * 0.5 + 0.5) : 1;
+    ctx.globalAlpha = 0.35 * blink + 0.65;
+    drawFoodAt(powerupDrop, cfg.color, cfg.icon);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawGrid();
+    if (state !== 'ready') {
+      drawObstacles();
+      drawFood();
+      drawPowerupDrop();
+      for (const p of players) if (p.alive) drawSnakeBody(p);
+    }
+    drawParticles();
+    if (worldEffects.slow && worldEffects.slow > performance.now()) {
+      ctx.fillStyle = 'rgba(57, 255, 136, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function loop(t) {
+    const dt = t - lastRender;
+    lastRender = t;
+    foodPulse += dt * 0.006;
+    updateParticles();
+    tickEffects();
+    updateComboMeter();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // ================= INPUT =================
+  function setDir(playerId, nx, ny) {
+    const p = players.find(pl => pl.id === playerId);
+    if (!p || !p.alive) return;
+    if (nx === -p.dir.x && ny === -p.dir.y) return;
+    p.nextDir = { x: nx, y: ny };
+  }
+
+  const p1Keys = {
+    ArrowUp:    [0, -1], w: [0, -1], W: [0, -1],
+    ArrowDown:  [0,  1], s: [0,  1], S: [0,  1],
+    ArrowLeft:  [-1, 0], a: [-1, 0], A: [-1, 0],
+    ArrowRight: [1,  0], d: [1,  0], D: [1,  0],
+  };
+  const p2Keys = {
+    i: [0, -1], I: [0, -1],
+    k: [0,  1], K: [0,  1],
+    j: [-1, 0], J: [-1, 0],
+    l: [1,  0], L: [1,  0],
+  };
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'm' || e.key === 'M') { toggleSound(); return; }
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'playing') {
+        state = 'paused';
+        clearInterval(tickTimer);
+        overlayTitle.textContent = 'PAUSED';
+        overlaySub.textContent = 'Press Space or click Resume to continue.';
+        startBtn.textContent = 'Resume';
+        diffSection.style.display = 'none';
+        seedSection.style.display = 'none';
+        modeRow.style.display = 'none';
+        overlay.classList.remove('hidden');
+      } else if (state === 'paused') {
+        state = 'playing';
+        overlay.classList.add('hidden');
+        rescheduleTick();
+      }
+      return;
+    }
+    if (state !== 'playing') return;
+
+    if (p1Keys[e.key]) {
+      e.preventDefault();
+      setDir(1, p1Keys[e.key][0], p1Keys[e.key][1]);
+    }
+    if (mode === 'duel' && p2Keys[e.key]) {
+      e.preventDefault();
+      setDir(2, p2Keys[e.key][0], p2Keys[e.key][1]);
+    }
+  });
+
+  // Mobile D-pad controls P1
+  document.querySelectorAll('.dpad button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const map = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+      const d = map[btn.dataset.dir];
+      if (d && state === 'playing') setDir(1, d[0], d[1]);
+    });
+  });
+
+  // Swipe
+  let touchStart = null;
+  canvas.addEventListener('touchstart', (e) => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  canvas.addEventListener('touchend', (e) => {
+    if (!touchStart || state !== 'playing') return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+    if (Math.abs(dx) > Math.abs(dy)) setDir(1, dx > 0 ? 1 : -1, 0);
+    else setDir(1, 0, dy > 0 ? 1 : -1);
+    touchStart = null;
+  }, { passive: true });
+
+  // Mode buttons
+  modeRow.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (!btn) return;
+    mode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    seedSection.style.display = mode === 'daily' ? 'flex' : 'none';
+    diffSection.style.display = mode === 'daily' ? 'none' : 'flex';
+    if (mode === 'daily' && !seedInput.value) seedInput.value = todaySeed();
+    beep(500, 0.06, 'sine', 0.05);
+  });
+
+  // Difficulty buttons
+  difficultyEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.diff-btn');
+    if (!btn) return;
+    difficulty = btn.dataset.diff;
+    localStorage.setItem('neonSnakeDiff', difficulty);
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === difficulty));
+    beep(500, 0.06, 'sine', 0.05);
+  });
+
+  // Sound
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    soundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+    soundToggle.classList.toggle('muted', !soundEnabled);
+    if (soundEnabled) { ensureAudio(); beep(660, 0.08, 'sine', 0.05); }
+    localStorage.setItem('neonSnakeSound', soundEnabled ? '1' : '0');
+  }
+  soundToggle.addEventListener('click', toggleSound);
+
+  // ================= START =================
+  function startGame() {
+    ensureAudio();
+    // Seed PRNG for daily mode
+    if (mode === 'daily') {
+      currentSeed = (seedInput.value || todaySeed()).trim();
+      prng = makeRng(currentSeed);
+      difficulty = 'normal';
+    } else {
+      prng = null;
+    }
+    reset();
+    state = 'playing';
+    overlay.classList.add('hidden');
+    clearInterval(tickTimer);
+    rescheduleTick();
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (state === 'paused') {
+      state = 'playing';
+      overlay.classList.add('hidden');
+      rescheduleTick();
+    } else {
+      startGame();
+    }
+  });
+
+  // ================= BOOT =================
+  // Restore preferences
+  difficulty = localStorage.getItem('neonSnakeDiff') || 'normal';
+  document.querySelectorAll('.diff-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.diff === difficulty);
+  });
+  if (localStorage.getItem('neonSnakeSound') === '0') {
+    soundEnabled = false;
+    soundToggle.textContent = '🔇';
+    soundToggle.classList.add('muted');
+  }
+  highScore = Number(localStorage.getItem('neonSnakeHigh') || 0);
+  highEl.textContent = highScore;
+
+  mode = 'solo';
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
